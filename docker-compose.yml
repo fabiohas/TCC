@@ -1,0 +1,91 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tcc-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tcc_localiza}
+      MYSQL_USER: ${MYSQL_USER:-tcc_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tcc_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  airflow-init:
+    build: .
+    command: bash -lc "airflow db init && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'True'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://${MYSQL_USER:-tcc_user}:${MYSQL_PASSWORD:-tcc_password}@mysql:3306/${MYSQL_DATABASE:-tcc_localiza}?charset=utf8mb4
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tcc_localiza}
+      MYSQL_USER: ${MYSQL_USER:-tcc_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tcc_password}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      SCRAPER_MAX_PAGINAS: ${SCRAPER_MAX_PAGINAS:-1}
+    volumes:
+      - .:/opt/airflow
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  airflow-webserver:
+    build: .
+    command: webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'True'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://${MYSQL_USER:-tcc_user}:${MYSQL_PASSWORD:-tcc_password}@mysql:3306/${MYSQL_DATABASE:-tcc_localiza}?charset=utf8mb4
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tcc_localiza}
+      MYSQL_USER: ${MYSQL_USER:-tcc_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tcc_password}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      SCRAPER_MAX_PAGINAS: ${SCRAPER_MAX_PAGINAS:-1}
+    volumes:
+      - .:/opt/airflow
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    build: .
+    command: scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'True'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+mysqlconnector://${MYSQL_USER:-tcc_user}:${MYSQL_PASSWORD:-tcc_password}@mysql:3306/${MYSQL_DATABASE:-tcc_localiza}?charset=utf8mb4
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-tcc_localiza}
+      MYSQL_USER: ${MYSQL_USER:-tcc_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tcc_password}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      SCRAPER_MAX_PAGINAS: ${SCRAPER_MAX_PAGINAS:-1}
+    volumes:
+      - .:/opt/airflow
+    depends_on:
+      mysql:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  mysql_data:
